@@ -1,8 +1,10 @@
 import asyncio
+main_event_loop = asyncio.get_event_loop()
 from aioconsole import ainput
 import websockets
 import json
 import threading
+import time
 
 from state import readState, printState
 import RPi.GPIO as GPIO
@@ -37,24 +39,28 @@ SLP = 27
 angleOut = 0
 angleCw = 45
 
-msg_out = { 'msg': 'out', 'angle': 0.0 }
-
 sockets = []
 async def hello(websocket, path):
-    #print( "New socket" )
+    print( "New socket" )
     sockets.append( websocket )
-    async for message in websocket:
-        pass
-
-async def check():
+    
     while True:
-        i = await ainput("angle:")
-        msg_out['angle'] = float( i )
+        await websocket.recv()
+
+
+async def update_loop():
+    while True:
+        msg = {
+            'angleOut': angleOut,
+            'angleCw': angleCw
+        }
 
         for s in sockets:
             if s.closed:
                 continue
-            await s.send( json.dumps(msg_out) )
+            await s.send( json.dumps(msg) )
+
+        await asyncio.sleep(0.05)
 
 
 # Outler or Colorwheel step
@@ -66,7 +72,7 @@ def doStep(channel):
     if channel == STEP_CW:
         angleCw += 360 / 1600   # 1600 Steps for 360°
         if angleCw > 360:
-            angleCW -= 360
+            angleCw -= 360
         updateSensors()
 
     elif channel == STEP_OUT:
@@ -90,7 +96,7 @@ def updateSensors():
         GPIO.output( HALL_CW, 1 )
 
     # Outlet Hallsensor
-    if angleOut > 315 or angleOut < 45:
+    if angleOut > 323 or angleOut < 37:
         GPIO.output( HALL_OUT, 0 )
     else:
         GPIO.output( HALL_OUT, 1 )
@@ -117,6 +123,7 @@ GPIO.setup( STEP_CW, GPIO.IN )
 GPIO.setup( STEP_OUT, GPIO.IN )
 
 
+
 # Stepping colorwheel & outlet
 GPIO.add_event_detect( STEP_CW, GPIO.RISING, callback=doStep )
 GPIO.add_event_detect( STEP_OUT, GPIO.RISING, callback=doStep )
@@ -125,10 +132,7 @@ updateSensors()
 
 
 
-
-
-threading.Thread(target=check).start()
-server = websockets.serve(hello, "localhost", 8080)
+server = websockets.serve(hello, "*", 8888)
 asyncio.get_event_loop().run_until_complete(server)
-asyncio.get_event_loop().run_until_complete(check())
+asyncio.get_event_loop().run_until_complete( update_loop() )
 asyncio.get_event_loop().run_forever()
