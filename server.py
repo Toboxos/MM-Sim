@@ -60,12 +60,19 @@ async def check():
 # Outler or Colorwheel step
 def doStep(channel):
     global angleCw
+    global angleOut
 
     # Step colorwheel
     if channel == STEP_CW:
         angleCw += 360 / 1600   # 1600 Steps for 360°
         if angleCw > 360:
             angleCW -= 360
+        updateSensors()
+
+    elif channel == STEP_OUT:
+        angleOut += 360 / 400   # 400 Steps for 360°
+        if angleOut > 360:
+            angleOut -= 360
         updateSensors()
 
 def updateSensors():
