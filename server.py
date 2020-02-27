@@ -1,8 +1,12 @@
 import asyncio
+main_event_loop = asyncio.get_event_loop()
 from aioconsole import ainput
 import websockets
 import json
 import threading
+import time
+import random
+random.seed( time.time() )
 
 from state import readState, printState
 import RPi.GPIO as GPIO
@@ -34,27 +38,46 @@ SLP = 27
 
 
 # Control Variables
-angleOut = 0
+angleOut = 120
 angleCw = 45
 
-msg_out = { 'msg': 'out', 'angle': 0.0 }
+
+# Color definitions
+NONE = 0
+RED = 1
+GREEN = 2
+BLUE = 3
+BROWN = 4
+ORANGE = 5
+YELLOW = 6
+COLORS = [RED, GREEN, BLUE, BROWN, ORANGE, YELLOW]
+
+# M&Ms in ColorWheel
+cw_mm = [NONE, NONE, NONE, NONE]
 
 sockets = []
 async def hello(websocket, path):
-    #print( "New socket" )
+    print( "New socket" )
     sockets.append( websocket )
-    async for message in websocket:
-        pass
-
-async def check():
+    
     while True:
-        i = await ainput("angle:")
-        msg_out['angle'] = float( i )
+        await websocket.recv()
+
+
+async def update_loop():
+    while True:
+        msg = {
+            'angleOut': angleOut,
+            'angleCw': angleCw,
+            'mm': cw_mm
+        }
 
         for s in sockets:
             if s.closed:
                 continue
-            await s.send( json.dumps(msg_out) )
+            await s.send( json.dumps(msg) )
+
+        await asyncio.sleep(0.05)
 
 
 # Outler or Colorwheel step
@@ -64,33 +87,80 @@ def doStep(channel):
 
     # Step colorwheel
     if channel == STEP_CW:
-        angleCw += 360 / 1600   # 1600 Steps for 360°
+        if GPIO.input(DIR_CW) == 0:
+            angleCw += 360 / 1600   # 1600 Steps for 360°
+        else:
+            angleCw -= 360 / 1600
+
         if angleCw > 360:
-            angleCW -= 360
-        updateSensors()
+            angleCw -= 360
+        elif angleCw < 0:
+            angleCw += 360
 
     elif channel == STEP_OUT:
-        angleOut += 360 / 400   # 400 Steps for 360°
+        if GPIO.input(DIR_OUT) == 0:
+            angleOut += 360 / 400    # 400 Steps for 360°
+        else:
+            angleOut -= 360 / 400
+
         if angleOut > 360:
             angleOut -= 360
-        updateSensors()
+        elif angleOut < 0:
+            angleOut += 360
+
+    updateSensors()
 
 def updateSensors():
 
-    # Colorwheel Hallsensor
+    posAtColorSensor = -1
+
+    # Colorwheel Hallsensor (2deg tolerance)
     if angleCw > 358 or angleCw < 2:        #   0deg
         GPIO.output( HALL_CW, 0 )
     elif angleCw > 88 and angleCw < 92:     #  90deg
         GPIO.output( HALL_CW, 0)
-    elif angleCw > 178 and angle < 182:     # 180deg
+    elif angleCw > 178 and angleCw < 182:     # 180deg
         GPIO.output( HALL_CW, 0)
-    elif angleCw > 268 and angle < 272:     # 270deg
+    elif angleCw > 268 and angleCw < 272:     # 270deg
         GPIO.output( HALL_CW, 0 )
     else:
         GPIO.output( HALL_CW, 1 )
 
+    # Colorwheel color sensor (4deg tolerance)
+    if angleCw > 356 or angleCw < 4:        #   0deg
+        posAtColorSensor = 1
+    elif angleCw > 86 and angleCw < 94:     #  90deg
+        posAtColorSensor = 0
+    elif angleCw > 176 and angleCw < 184:     # 180deg
+        posAtColorSensor = 3
+    elif angleCw > 266 and angleCw < 274:     # 270deg
+        posAtColorSensor = 2
+
+    # Colorwheel is aligned to colorsensor
+    if posAtColorSensor != -1:
+
+        # Output color
+        color = cw_mm[ posAtColorSensor % 4 ]
+        GPIO.output( COLOR0, (color >> 0) & 0x1 )
+        GPIO.output( COLOR1, (color >> 1) & 0x1 )
+        GPIO.output( COLOR2, (color >> 2) & 0x1 )
+
+        # Fill M&M to colorwheel
+        if cw_mm[ (posAtColorSensor - 1) % 4 ] == NONE:
+            cw_mm[ (posAtColorSensor - 1) % 4 ] = COLORS[ random.randint(0, 5) ]    
+
+        # Let M&M fall out
+        cw_mm[ (posAtColorSensor + 1) % 4 ] = NONE        
+
+    else:
+        GPIO.output( COLOR0, 0 )
+        GPIO.output( COLOR1, 0 )
+        GPIO.output( COLOR2, 0 )
+
+
+
     # Outlet Hallsensor
-    if angleOut > 315 or angleOut < 45:
+    if angleOut > 323 or angleOut < 37:
         GPIO.output( HALL_OUT, 0 )
     else:
         GPIO.output( HALL_OUT, 1 )
@@ -116,6 +186,10 @@ GPIO.setup( HALL_OUT, GPIO.OUT )
 GPIO.setup( STEP_CW, GPIO.IN )
 GPIO.setup( STEP_OUT, GPIO.IN )
 
+# Motor direction as input
+GPIO.setup( DIR_CW, GPIO.IN )
+GPIO.setup( DIR_OUT, GPIO.IN )
+
 
 # Stepping colorwheel & outlet
 GPIO.add_event_detect( STEP_CW, GPIO.RISING, callback=doStep )
@@ -125,10 +199,7 @@ updateSensors()
 
 
 
-
-
-threading.Thread(target=check).start()
-server = websockets.serve(hello, "localhost", 8080)
+server = websockets.serve(hello, "*", 8888)
 asyncio.get_event_loop().run_until_complete(server)
-asyncio.get_event_loop().run_until_complete(check())
+asyncio.get_event_loop().run_until_complete( update_loop() )
 asyncio.get_event_loop().run_forever()
