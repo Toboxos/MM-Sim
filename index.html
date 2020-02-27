@@ -22,6 +22,15 @@
 
         <script>
             var socket = null;
+            var colors = [
+                "rgba(255, 255, 255, 0)",   // None
+                "rgb(243, 16, 16)",         // Red
+                "rgb(6, 167, 8)",           // Green
+                "rgb(45, 129, 240)",           // Blue
+                "rgb(150, 91, 43)",         // Brown
+                "rgb(240, 155, 45)",         // Orange
+                "rgb(246, 243, 49)"         // Yellow
+            ]
 
             function connect() {
                 var e = document.getElementById('ip-connect');
@@ -32,10 +41,12 @@
 
             function recv(event) {
                 message = JSON.parse( event.data )
-                console.log( message ) 
 
-                if( message.msg == "out" ) {
-                    document.getElementById('outlet-pointer').style.transform = "rotate(" + message.angle + "deg)";
+                document.getElementById('outlet-pointer').style.transform = "rotate(" + message.angleOut + "deg)";
+                document.getElementById('svg-cw').style.transform = "rotate(" + message.angleCw + "deg)";
+
+                for( var i = 0; i < 4; ++i ) {
+                    document.getElementById('mm-' + (i + 1)).style.fill = colors[message.mm[i]];
                 }
             }
         </script>
@@ -239,7 +250,7 @@
                 height="142.29106mm"
                 viewBox="0 0 142.28693 142.29106"
                 version="1.1"
-                id="svg8"
+                id="svg-cw"
                 inkscape:version="0.92.4 (5da689c313, 2019-01-14)"
                 sodipodi:docname="colorwheel.svg">
                 <defs
