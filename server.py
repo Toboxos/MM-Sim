@@ -6,6 +6,7 @@ import json
 import threading
 import time
 import random
+random.seed( time.time() )
 
 from state import readState, printState
 import RPi.GPIO as GPIO
@@ -111,32 +112,50 @@ def doStep(channel):
 
 def updateSensors():
 
+    posAtColorSensor = -1
+
     # Colorwheel Hallsensor
     if angleCw > 358 or angleCw < 2:        #   0deg
         GPIO.output( HALL_CW, 0 )# Color definitions
-
-        if cw_mm[0] == NONE:
-            cw_mm[0] = COLORS[random.randint(0, 5)]
+        posAtColorSensor = 1
             
     elif angleCw > 88 and angleCw < 92:     #  90deg
         GPIO.output( HALL_CW, 0)
-
-        if cw_mm[3] == NONE:
-            cw_mm[3] = COLORS[random.randint(0, 5)]
+        posAtColorSensor = 0
         
-    elif angleCw > 178 and angle < 182:     # 180deg
+    elif angleCw > 178 and angleCw < 182:     # 180deg
         GPIO.output( HALL_CW, 0)
-
-        if cw_mm[2] == NONE:
-            cw_mm[2] = COLORS[random.randint(0, 5)]
+        posAtColorSensor = 3
         
-    elif angleCw > 268 and angle < 272:     # 270deg
+    elif angleCw > 268 and angleCw < 272:     # 270deg
         GPIO.output( HALL_CW, 0 )
+        posAtColorSensor = 2
 
-        if cw_mm[1] == NONE:
-            cw_mm[1] = COLORS[random.randint(0, 5)]
     else:
         GPIO.output( HALL_CW, 1 )
+
+    # Colorwheel is aligned to colorsensor
+    if posAtColorSensor != -1:
+
+        # Output color
+        color = cw_mm[ posAtColorSensor % 4 ]
+        GPIO.output( COLOR0, (color >> 0) & 0x1 )
+        GPIO.output( COLOR1, (color >> 1) & 0x1 )
+        GPIO.output( COLOR2, (color >> 2) & 0x1 )
+
+        # Fill M&M to colorwheel
+        if cw_mm[ (posAtColorSensor - 1) % 4 ] == NONE:
+            cw_mm[ (posAtColorSensor - 1) % 4 ] = COLORS[ random.randint(0, 5) ]    
+
+        # Let M&M fall out
+        cw_mm[ (posAtColorSensor + 1) % 4 ] = NONE        
+
+    else:
+        GPIO.output( COLOR0, 0 )
+        GPIO.output( COLOR1, 0 )
+        GPIO.output( COLOR2, 0 )
+
+
 
     # Outlet Hallsensor
     if angleOut > 323 or angleOut < 37:
