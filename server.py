@@ -114,25 +114,27 @@ def updateSensors():
 
     posAtColorSensor = -1
 
-    # Colorwheel Hallsensor
+    # Colorwheel Hallsensor (2deg tolerance)
     if angleCw > 358 or angleCw < 2:        #   0deg
-        GPIO.output( HALL_CW, 0 )# Color definitions
-        posAtColorSensor = 1
-            
+        GPIO.output( HALL_CW, 0 )
     elif angleCw > 88 and angleCw < 92:     #  90deg
         GPIO.output( HALL_CW, 0)
-        posAtColorSensor = 0
-        
     elif angleCw > 178 and angleCw < 182:     # 180deg
         GPIO.output( HALL_CW, 0)
-        posAtColorSensor = 3
-        
     elif angleCw > 268 and angleCw < 272:     # 270deg
         GPIO.output( HALL_CW, 0 )
-        posAtColorSensor = 2
-
     else:
         GPIO.output( HALL_CW, 1 )
+
+    # Colorwheel color sensor (4deg tolerance)
+    if angleCw > 356 or angleCw < 4:        #   0deg
+        posAtColorSensor = 1
+    elif angleCw > 86 and angleCw < 94:     #  90deg
+        posAtColorSensor = 0
+    elif angleCw > 176 and angleCw < 184:     # 180deg
+        posAtColorSensor = 3
+    elif angleCw > 266 and angleCw < 274:     # 270deg
+        posAtColorSensor = 2
 
     # Colorwheel is aligned to colorsensor
     if posAtColorSensor != -1:
