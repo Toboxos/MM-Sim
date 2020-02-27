@@ -85,8 +85,12 @@ def doStep(channel):
     global angleCw
     global angleOut
 
-    # Step colorwheel
-    if channel == STEP_CW:
+    # Coprocessor is in sleep mode
+    if GPIO.input(SLP) == 0:
+        return
+
+    # Step colorwheel and RST is high
+    if channel == STEP_CW and GPIO.input(RST_CW) == 1:
         if GPIO.input(DIR_CW) == 0:
             angleCw += 360 / 1600   # 1600 Steps for 360°
         else:
@@ -97,7 +101,8 @@ def doStep(channel):
         elif angleCw < 0:
             angleCw += 360
 
-    elif channel == STEP_OUT:
+    # Step Outlet and RST is high
+    elif channel == STEP_OUT and GPIO.input(RST_OUT) == 1:
         if GPIO.input(DIR_OUT) == 0:
             angleOut += 360 / 400    # 400 Steps for 360°
         else:
@@ -189,6 +194,10 @@ GPIO.setup( STEP_OUT, GPIO.IN )
 # Motor direction as input
 GPIO.setup( DIR_CW, GPIO.IN )
 GPIO.setup( DIR_OUT, GPIO.IN )
+
+# RST Pins
+GPIO.setup( RST_CW, GPIO.IN )
+GPIO.setup( RST_OUT, GPIO.IN )
 
 
 # Stepping colorwheel & outlet
