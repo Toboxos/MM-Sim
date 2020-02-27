@@ -13,6 +13,13 @@ import RPi.GPIO as GPIO
 GPIO.setmode( GPIO.BCM )
 
 # Pin defintions
+SER = 2
+SRCLK = 3
+SRCLR = 4
+RCLK = 5
+A = 6
+B = 7
+
 BTN1 = 8
 BTN2 = 9
 BTN3 = 10
@@ -41,6 +48,10 @@ SLP = 27
 angleOut = 120
 angleCw = 45
 
+SHIFT_REG_IN = 0
+SHIFT_REG_OUT = 0
+
+doFill = True
 
 # Color definitions
 NONE = 0
@@ -57,11 +68,16 @@ cw_mm = [NONE, NONE, NONE, NONE]
 
 sockets = []
 async def hello(websocket, path):
+    global doFill
+
     print( "New socket" )
     sockets.append( websocket )
     
     while True:
-        await websocket.recv()
+        msg = await websocket.recv()
+        
+        if msg == "toggleFill":
+            doFill = not doFill
 
 
 async def update_loop():
@@ -79,6 +95,27 @@ async def update_loop():
 
         await asyncio.sleep(0.05)
 
+
+def doShift(channel):
+    global SHIFT_REG_IN
+
+    # Clear shift reg
+    if GPIO.input(SRCLR) == 0:
+        SHIFT_REG_IN = 0
+        return
+
+    SHIFT_REG_IN = SHIFT_REG_IN >> 1
+    SHIFT_REG_IN += GPIO.input(SER) << 7
+
+def updateShift(channel):
+    global SHIFT_REG_IN
+    global SHIFT_REG_OUT
+
+    # Clear shift reg
+    if GPIO.input(SRCLR) == 0:
+        SHIFT_REG_IN = 0
+
+    SHIFT_REG_OUT = SHIFT_REG_IN
 
 # Outler or Colorwheel step
 def doStep(channel):
@@ -151,7 +188,7 @@ def updateSensors():
         GPIO.output( COLOR2, (color >> 2) & 0x1 )
 
         # Fill M&M to colorwheel
-        if cw_mm[ (posAtColorSensor - 1) % 4 ] == NONE:
+        if cw_mm[ (posAtColorSensor - 1) % 4 ] == NONE and doFill:
             cw_mm[ (posAtColorSensor - 1) % 4 ] = COLORS[ random.randint(0, 5) ]    
 
         # Let M&M fall out
@@ -199,10 +236,18 @@ GPIO.setup( DIR_OUT, GPIO.IN )
 GPIO.setup( RST_CW, GPIO.IN )
 GPIO.setup( RST_OUT, GPIO.IN )
 
+GPIO.setup( SRCLK, GPIO.IN )
+GPIO.setup( RCLK, GPIO.IN )
+GPIO.setup( SRCLR, GPIO.IN )
+GPIO.setup( SER, GPIO.IN )
+GPIO.setup( SLP, GPIO.IN )
 
 # Stepping colorwheel & outlet
 GPIO.add_event_detect( STEP_CW, GPIO.RISING, callback=doStep )
 GPIO.add_event_detect( STEP_OUT, GPIO.RISING, callback=doStep )
+
+GPIO.add_event_detect( SRCLK, GPIO.RISING, callback=doShift )
+GPIO.add_event_detect( RCLK, GPIO.RISING, callback=updateShift )
 
 updateSensors()
 
